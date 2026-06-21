@@ -10,8 +10,8 @@ interface Location {
 
 export default function RunPage() {
   const [location, setLocation] = useState<Location | null>(null);
-  const [previousLocation, setPreviousLocation] = useState<Location | null>(null);
   const [distance, setDistance] = useState(0);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
 
   // Use a ref to avoid stale closure in the watchPosition callback
   const prevLocationRef = useRef<Location | null>(null);
@@ -19,6 +19,11 @@ export default function RunPage() {
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        setAccuracy(position.coords.accuracy);
+        if (position.coords.accuracy > 20) {
+          return;
+        }
+
         const newLocation = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -40,7 +45,6 @@ export default function RunPage() {
         }
 
         prevLocationRef.current = newLocation;
-        setPreviousLocation(newLocation);
         setLocation(newLocation);
       },
       (error) => {
@@ -48,6 +52,8 @@ export default function RunPage() {
       },
       {
         enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
       }
     );
 
@@ -65,10 +71,11 @@ export default function RunPage() {
           <p>Latitude: {location.lat}</p>
           <p>Longitude: {location.lng}</p>
           <p>Distance: {(distance / 1000).toFixed(2)} km</p>
+          <p>Accuracy: {accuracy?.toFixed(1)} m</p>
         </>
       ) : (
         <p>Getting location...</p>
       )}
     </main>
   );
-}
+}
