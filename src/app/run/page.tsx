@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { haversineDistance } from "@/lib/gps/haversine";
 
 interface Location {
@@ -10,37 +10,40 @@ interface Location {
 
 export default function RunPage() {
   const [location, setLocation] = useState<Location | null>(null);
-  const [distance, setDistance] = useState(0);
   const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [distance, setDistance] = useState<number>(0);
 
-  // Use a ref to avoid stale closure in the watchPosition callback
   const prevLocationRef = useRef<Location | null>(null);
 
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         setAccuracy(position.coords.accuracy);
-        if (position.coords.accuracy > 20) {
-          return;
-        }
 
         const newLocation = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
 
-        const prev = prevLocationRef.current;
-        if (prev) {
+        const previousLocation = prevLocationRef.current;
+
+        if (previousLocation) {
           const movedDistance = haversineDistance(
-            prev.lat,
-            prev.lng,
+            previousLocation.lat,
+            previousLocation.lng,
             newLocation.lat,
             newLocation.lng
           );
 
+          console.log(
+            "Movement detected:",
+            movedDistance.toFixed(2),
+            "meters"
+          );
+
           // GPS jitter filter
           if (movedDistance > 5) {
-            setDistance((prevDist) => prevDist + movedDistance);
+            setDistance((prev) => prev + movedDistance);
           }
         }
 
@@ -48,33 +51,51 @@ export default function RunPage() {
         setLocation(newLocation);
       },
       (error) => {
-        console.error(error);
+        console.error("Error Code:", error.code);
+        console.error("Error Message:", error.message);
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+        timeout: 30000,
+        maximumAge: 5000,
       }
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
   return (
     <main className="p-6">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-4xl font-bold mb-6">
         Sprintly
       </h1>
 
       {location ? (
-        <>
-          <p>Latitude: {location.lat}</p>
-          <p>Longitude: {location.lng}</p>
-          <p>Distance: {(distance / 1000).toFixed(2)} km</p>
-          <p>Accuracy: {accuracy?.toFixed(1)} m</p>
-        </>
+        <div className="space-y-3">
+          <p>
+            <strong>Latitude:</strong> {location.lat}
+          </p>
+
+          <p>
+            <strong>Longitude:</strong> {location.lng}
+          </p>
+
+          <p>
+            <strong>Accuracy:</strong>{" "}
+            {accuracy !== null
+              ? `${accuracy.toFixed(1)} m`
+              : "Calculating..."}
+          </p>
+
+          <p>
+            <strong>Distance:</strong>{" "}
+            {(distance / 1000).toFixed(3)} km
+          </p>
+        </div>
       ) : (
-        <p>Getting location...</p>
+        <p>Getting Location...</p>
       )}
     </main>
   );
