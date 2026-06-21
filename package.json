@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@react-google-maps/api": "^2.20.8",
     "next": "16.2.9",
     "next-auth": "^4.24.14",
     "prisma": "^6.19.3",
