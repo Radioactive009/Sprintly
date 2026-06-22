@@ -19,11 +19,7 @@ export default function RunPage() {
     startTime: null,
     elapsedTime: 0,
     distance: 0,
-
-    currentSpeed: 0,
     averageSpeed: 0,
-
-    currentPace: 0,
     averagePace: 0,
   });
 
@@ -32,9 +28,7 @@ export default function RunPage() {
   >([]);
 
   const prevLocationRef = useRef<Location | null>(null);
-  const previousTimestampRef = useRef<number | null>(null);
 
-  // GPS Tracking
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -42,7 +36,6 @@ export default function RunPage() {
 
         setAccuracy(currentAccuracy);
 
-        // Ignore poor GPS readings
         if (currentAccuracy > 20) {
           return;
         }
@@ -52,17 +45,10 @@ export default function RunPage() {
           lng: position.coords.longitude,
         };
 
-        const currentTimestamp = position.timestamp;
-
         if (session.isRunning) {
           const previousLocation = prevLocationRef.current;
-          const previousTimestamp =
-            previousTimestampRef.current;
 
-          if (
-            previousLocation &&
-            previousTimestamp
-          ) {
+          if (previousLocation) {
             const movedDistance = haversineDistance(
               previousLocation.lat,
               previousLocation.lng,
@@ -70,58 +56,14 @@ export default function RunPage() {
               newLocation.lng
             );
 
-            const timeDeltaSeconds =
-              (currentTimestamp -
-                previousTimestamp) /
-              1000;
-
-            // Ignore GPS jitter and teleportation
             if (
               movedDistance > 5 &&
-              movedDistance < 50 &&
-              timeDeltaSeconds > 0
+              movedDistance < 50
             ) {
-              const currentSpeed =
-                (movedDistance /
-                  timeDeltaSeconds) *
-                3.6; // m/s -> km/h
-
-              setSession((prev) => {
-                const newDistance =
-                  prev.distance +
-                  movedDistance;
-
-                const totalHours =
-                  prev.elapsedTime / 3600;
-
-                const averageSpeed =
-                  totalHours > 0
-                    ? newDistance /
-                      1000 /
-                      totalHours
-                    : 0;
-
-                const currentPace =
-                  currentSpeed > 0
-                    ? 60 / currentSpeed
-                    : 0;
-
-                const averagePace =
-                  averageSpeed > 0
-                    ? 60 / averageSpeed
-                    : 0;
-
-                return {
-                  ...prev,
-                  distance: newDistance,
-
-                  currentSpeed,
-                  averageSpeed,
-
-                  currentPace,
-                  averagePace,
-                };
-              });
+              setSession((prev) => ({
+                ...prev,
+                distance: prev.distance + movedDistance,
+              }));
 
               setPathCoordinates((prev) => [
                 ...prev,
@@ -132,9 +74,6 @@ export default function RunPage() {
         }
 
         prevLocationRef.current = newLocation;
-        previousTimestampRef.current =
-          currentTimestamp;
-
         setLocation(newLocation);
       },
       (error) => {
@@ -156,16 +95,39 @@ export default function RunPage() {
     };
   }, [session.isRunning]);
 
-  // Timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
     if (session.isRunning) {
       interval = setInterval(() => {
-        setSession((prev) => ({
-          ...prev,
-          elapsedTime: prev.elapsedTime + 1,
-        }));
+        setSession((prev) => {
+          const newElapsedTime =
+            prev.elapsedTime + 1;
+
+          const distanceKm =
+            prev.distance / 1000;
+
+          const hours =
+            newElapsedTime / 3600;
+
+          const averageSpeed =
+            hours > 0
+              ? distanceKm / hours
+              : 0;
+
+          const averagePace =
+            distanceKm > 0
+              ? (newElapsedTime / 60) /
+                distanceKm
+              : 0;
+
+          return {
+            ...prev,
+            elapsedTime: newElapsedTime,
+            averageSpeed,
+            averagePace,
+          };
+        });
       }, 1000);
     }
 
@@ -180,18 +142,13 @@ export default function RunPage() {
       startTime: Date.now(),
       elapsedTime: 0,
       distance: 0,
-
-      currentSpeed: 0,
       averageSpeed: 0,
-
-      currentPace: 0,
       averagePace: 0,
     });
 
     setPathCoordinates([]);
 
     prevLocationRef.current = location;
-    previousTimestampRef.current = Date.now();
   };
 
   const stopRun = () => {
@@ -199,6 +156,11 @@ export default function RunPage() {
       ...prev,
       isRunning: false,
     }));
+
+    console.log("Run Summary");
+    console.log("Distance:", session.distance);
+    console.log("GPS Points:", pathCoordinates.length);
+    console.log("Path:", pathCoordinates);
   };
 
   const formatTime = (seconds: number) => {
@@ -214,8 +176,12 @@ export default function RunPage() {
   const formatPace = (
     pace: number
   ) => {
-    if (!pace || !isFinite(pace))
+    if (
+      pace === 0 ||
+      !isFinite(pace)
+    ) {
       return "--";
+    }
 
     const mins = Math.floor(pace);
     const secs = Math.round(
@@ -246,8 +212,7 @@ export default function RunPage() {
           <strong>Distance:</strong>{" "}
           {(session.distance / 1000).toFixed(
             3
-          )}{" "}
-          km
+          )} km
         </p>
 
         <p>
@@ -258,26 +223,10 @@ export default function RunPage() {
         </p>
 
         <p>
-          <strong>Current Speed:</strong>{" "}
-          {session.currentSpeed.toFixed(
-            2
-          )}{" "}
-          km/h
-        </p>
-
-        <p>
           <strong>Average Speed:</strong>{" "}
           {session.averageSpeed.toFixed(
             2
-          )}{" "}
-          km/h
-        </p>
-
-        <p>
-          <strong>Current Pace:</strong>{" "}
-          {formatPace(
-            session.currentPace
-          )}
+          )} km/h
         </p>
 
         <p>

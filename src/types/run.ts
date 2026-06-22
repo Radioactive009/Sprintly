@@ -4,9 +4,6 @@ export interface RunSession {
   elapsedTime: number;
   distance: number;
 
-  currentSpeed: number;
   averageSpeed: number;
-
-  currentPace: number;
   averagePace: number;
 }
