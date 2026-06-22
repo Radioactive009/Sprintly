@@ -19,6 +19,12 @@ export default function RunPage() {
     startTime: null,
     elapsedTime: 0,
     distance: 0,
+
+    currentSpeed: 0,
+    averageSpeed: 0,
+
+    currentPace: 0,
+    averagePace: 0,
   });
 
   const [pathCoordinates, setPathCoordinates] = useState<
@@ -26,7 +32,9 @@ export default function RunPage() {
   >([]);
 
   const prevLocationRef = useRef<Location | null>(null);
+  const previousTimestampRef = useRef<number | null>(null);
 
+  // GPS Tracking
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -34,13 +42,8 @@ export default function RunPage() {
 
         setAccuracy(currentAccuracy);
 
-        // Ignore bad GPS readings
+        // Ignore poor GPS readings
         if (currentAccuracy > 20) {
-          console.log(
-            `Ignored GPS point. Accuracy too poor: ${currentAccuracy.toFixed(
-              1
-            )}m`
-          );
           return;
         }
 
@@ -49,10 +52,17 @@ export default function RunPage() {
           lng: position.coords.longitude,
         };
 
+        const currentTimestamp = position.timestamp;
+
         if (session.isRunning) {
           const previousLocation = prevLocationRef.current;
+          const previousTimestamp =
+            previousTimestampRef.current;
 
-          if (previousLocation) {
+          if (
+            previousLocation &&
+            previousTimestamp
+          ) {
             const movedDistance = haversineDistance(
               previousLocation.lat,
               previousLocation.lng,
@@ -60,21 +70,58 @@ export default function RunPage() {
               newLocation.lng
             );
 
-            console.log({
-              accuracy: currentAccuracy,
-              movedDistance,
-            });
+            const timeDeltaSeconds =
+              (currentTimestamp -
+                previousTimestamp) /
+              1000;
 
-            // Ignore GPS jitter (<5m)
-            // Ignore impossible jumps (>50m)
+            // Ignore GPS jitter and teleportation
             if (
               movedDistance > 5 &&
-              movedDistance < 50
+              movedDistance < 50 &&
+              timeDeltaSeconds > 0
             ) {
-              setSession((prev) => ({
-                ...prev,
-                distance: prev.distance + movedDistance,
-              }));
+              const currentSpeed =
+                (movedDistance /
+                  timeDeltaSeconds) *
+                3.6; // m/s -> km/h
+
+              setSession((prev) => {
+                const newDistance =
+                  prev.distance +
+                  movedDistance;
+
+                const totalHours =
+                  prev.elapsedTime / 3600;
+
+                const averageSpeed =
+                  totalHours > 0
+                    ? newDistance /
+                      1000 /
+                      totalHours
+                    : 0;
+
+                const currentPace =
+                  currentSpeed > 0
+                    ? 60 / currentSpeed
+                    : 0;
+
+                const averagePace =
+                  averageSpeed > 0
+                    ? 60 / averageSpeed
+                    : 0;
+
+                return {
+                  ...prev,
+                  distance: newDistance,
+
+                  currentSpeed,
+                  averageSpeed,
+
+                  currentPace,
+                  averagePace,
+                };
+              });
 
               setPathCoordinates((prev) => [
                 ...prev,
@@ -85,6 +132,9 @@ export default function RunPage() {
         }
 
         prevLocationRef.current = newLocation;
+        previousTimestampRef.current =
+          currentTimestamp;
+
         setLocation(newLocation);
       },
       (error) => {
@@ -106,6 +156,7 @@ export default function RunPage() {
     };
   }, [session.isRunning]);
 
+  // Timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -129,12 +180,18 @@ export default function RunPage() {
       startTime: Date.now(),
       elapsedTime: 0,
       distance: 0,
+
+      currentSpeed: 0,
+      averageSpeed: 0,
+
+      currentPace: 0,
+      averagePace: 0,
     });
 
     setPathCoordinates([]);
 
-    // Reset previous point
     prevLocationRef.current = location;
+    previousTimestampRef.current = Date.now();
   };
 
   const stopRun = () => {
@@ -142,20 +199,33 @@ export default function RunPage() {
       ...prev,
       isRunning: false,
     }));
-
-    console.log("Run Summary");
-    console.log("Distance:", session.distance);
-    console.log("GPS Points:", pathCoordinates.length);
-    console.log("Path:", pathCoordinates);
   };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
 
-    return `${String(mins).padStart(2, "0")}:${String(
-      secs
-    ).padStart(2, "0")}`;
+    return `${String(mins).padStart(
+      2,
+      "0"
+    )}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const formatPace = (
+    pace: number
+  ) => {
+    if (!pace || !isFinite(pace))
+      return "--";
+
+    const mins = Math.floor(pace);
+    const secs = Math.round(
+      (pace - mins) * 60
+    );
+
+    return `${mins}:${String(secs).padStart(
+      2,
+      "0"
+    )} /km`;
   };
 
   return (
@@ -167,17 +237,54 @@ export default function RunPage() {
       <div className="space-y-4 text-xl">
         <p>
           <strong>Status:</strong>{" "}
-          {session.isRunning ? "🏃 Running" : "⏸️ Idle"}
+          {session.isRunning
+            ? "🏃 Running"
+            : "⏸️ Idle"}
         </p>
 
         <p>
           <strong>Distance:</strong>{" "}
-          {(session.distance / 1000).toFixed(3)} km
+          {(session.distance / 1000).toFixed(
+            3
+          )}{" "}
+          km
         </p>
 
         <p>
           <strong>Time:</strong>{" "}
-          {formatTime(session.elapsedTime)}
+          {formatTime(
+            session.elapsedTime
+          )}
+        </p>
+
+        <p>
+          <strong>Current Speed:</strong>{" "}
+          {session.currentSpeed.toFixed(
+            2
+          )}{" "}
+          km/h
+        </p>
+
+        <p>
+          <strong>Average Speed:</strong>{" "}
+          {session.averageSpeed.toFixed(
+            2
+          )}{" "}
+          km/h
+        </p>
+
+        <p>
+          <strong>Current Pace:</strong>{" "}
+          {formatPace(
+            session.currentPace
+          )}
+        </p>
+
+        <p>
+          <strong>Average Pace:</strong>{" "}
+          {formatPace(
+            session.averagePace
+          )}
         </p>
 
         <p>
