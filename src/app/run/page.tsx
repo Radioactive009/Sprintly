@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { haversineDistance } from "@/lib/gps/haversine";
+import { RunSession } from "@/types/run";
+import { LocationPoint } from "@/types/location";
 
 interface Location {
   lat: number;
@@ -11,10 +13,21 @@ interface Location {
 export default function RunPage() {
   const [location, setLocation] = useState<Location | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
-  const [distance, setDistance] = useState<number>(0);
+
+  const [session, setSession] = useState<RunSession>({
+    isRunning: false,
+    startTime: null,
+    elapsedTime: 0,
+    distance: 0,
+  });
+
+  const [pathCoordinates, setPathCoordinates] = useState<
+    LocationPoint[]
+  >([]);
 
   const prevLocationRef = useRef<Location | null>(null);
 
+  // GPS Tracking
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -25,25 +38,28 @@ export default function RunPage() {
           lng: position.coords.longitude,
         };
 
-        const previousLocation = prevLocationRef.current;
+        if (session.isRunning) {
+          const previousLocation = prevLocationRef.current;
 
-        if (previousLocation) {
-          const movedDistance = haversineDistance(
-            previousLocation.lat,
-            previousLocation.lng,
-            newLocation.lat,
-            newLocation.lng
-          );
+          if (previousLocation) {
+            const movedDistance = haversineDistance(
+              previousLocation.lat,
+              previousLocation.lng,
+              newLocation.lat,
+              newLocation.lng
+            );
 
-          console.log(
-            "Movement detected:",
-            movedDistance.toFixed(2),
-            "meters"
-          );
+            if (movedDistance > 5) {
+              setSession((prev) => ({
+                ...prev,
+                distance: prev.distance + movedDistance,
+              }));
 
-          // GPS jitter filter
-          if (movedDistance > 5) {
-            setDistance((prev) => prev + movedDistance);
+              setPathCoordinates((prev) => [
+                ...prev,
+                newLocation,
+              ]);
+            }
           }
         }
 
@@ -51,8 +67,7 @@ export default function RunPage() {
         setLocation(newLocation);
       },
       (error) => {
-        console.error("Error Code:", error.code);
-        console.error("Error Message:", error.message);
+        console.error("GPS Error:", error.message);
       },
       {
         enableHighAccuracy: true,
@@ -64,39 +79,123 @@ export default function RunPage() {
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, []);
+  }, [session.isRunning]);
+
+  // Timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (session.isRunning) {
+      interval = setInterval(() => {
+        setSession((prev) => ({
+          ...prev,
+          elapsedTime: prev.elapsedTime + 1,
+        }));
+      }, 1000);
+    }
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [session.isRunning]);
+
+  const startRun = () => {
+    setSession({
+      isRunning: true,
+      startTime: Date.now(),
+      elapsedTime: 0,
+      distance: 0,
+    });
+
+    setPathCoordinates([]);
+
+    prevLocationRef.current = location;
+  };
+
+  const stopRun = () => {
+    setSession((prev) => ({
+      ...prev,
+      isRunning: false,
+    }));
+
+    console.log("Run Path:", pathCoordinates);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+
+    return `${String(mins).padStart(2, "0")}:${String(
+      secs
+    ).padStart(2, "0")}`;
+  };
 
   return (
-    <main className="p-6">
-      <h1 className="text-4xl font-bold mb-6">
+    <main className="min-h-screen bg-black text-white p-6">
+      <h1 className="text-5xl font-bold mb-8">
         Sprintly
       </h1>
 
-      {location ? (
-        <div className="space-y-3">
-          <p>
-            <strong>Latitude:</strong> {location.lat}
-          </p>
+      <div className="space-y-4 text-xl">
+        <p>
+          <strong>Status:</strong>{" "}
+          {session.isRunning ? "🏃 Running" : "⏸️ Idle"}
+        </p>
 
-          <p>
-            <strong>Longitude:</strong> {location.lng}
-          </p>
+        <p>
+          <strong>Distance:</strong>{" "}
+          {(session.distance / 1000).toFixed(3)} km
+        </p>
 
-          <p>
-            <strong>Accuracy:</strong>{" "}
-            {accuracy !== null
-              ? `${accuracy.toFixed(1)} m`
-              : "Calculating..."}
-          </p>
+        <p>
+          <strong>Time:</strong>{" "}
+          {formatTime(session.elapsedTime)}
+        </p>
 
-          <p>
-            <strong>Distance:</strong>{" "}
-            {(distance / 1000).toFixed(3)} km
-          </p>
-        </div>
-      ) : (
-        <p>Getting Location...</p>
-      )}
+        <p>
+          <strong>GPS Points:</strong>{" "}
+          {pathCoordinates.length}
+        </p>
+
+        <p>
+          <strong>Accuracy:</strong>{" "}
+          {accuracy !== null
+            ? `${accuracy.toFixed(1)} m`
+            : "Calculating..."}
+        </p>
+
+        {location && (
+          <>
+            <p>
+              <strong>Latitude:</strong>{" "}
+              {location.lat}
+            </p>
+
+            <p>
+              <strong>Longitude:</strong>{" "}
+              {location.lng}
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="mt-8 flex gap-4">
+        {!session.isRunning ? (
+          <button
+            onClick={startRun}
+            className="bg-green-600 px-6 py-3 rounded-lg text-white font-semibold"
+          >
+            Start Run
+          </button>
+        ) : (
+          <button
+            onClick={stopRun}
+            className="bg-red-600 px-6 py-3 rounded-lg text-white font-semibold"
+          >
+            Stop Run
+          </button>
+        )}
+      </div>
     </main>
   );
 }
