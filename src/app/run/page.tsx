@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { haversineDistance } from "@/lib/gps/haversine";
 import { RunSession } from "@/types/run";
+import { RunSummary } from "@/types/run-summary";
 import { LocationPoint } from "@/types/location";
 
 interface Location {
@@ -13,6 +14,9 @@ interface Location {
 export default function RunPage() {
   const [location, setLocation] = useState<Location | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
+
+  const [summary, setSummary] =
+    useState<RunSummary | null>(null);
 
   const [session, setSession] = useState<RunSession>({
     isRunning: false,
@@ -32,7 +36,8 @@ export default function RunPage() {
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        const currentAccuracy = position.coords.accuracy;
+        const currentAccuracy =
+          position.coords.accuracy;
 
         setAccuracy(currentAccuracy);
 
@@ -46,15 +51,17 @@ export default function RunPage() {
         };
 
         if (session.isRunning) {
-          const previousLocation = prevLocationRef.current;
+          const previousLocation =
+            prevLocationRef.current;
 
           if (previousLocation) {
-            const movedDistance = haversineDistance(
-              previousLocation.lat,
-              previousLocation.lng,
-              newLocation.lat,
-              newLocation.lng
-            );
+            const movedDistance =
+              haversineDistance(
+                previousLocation.lat,
+                previousLocation.lng,
+                newLocation.lat,
+                newLocation.lng
+              );
 
             if (
               movedDistance > 5 &&
@@ -62,7 +69,9 @@ export default function RunPage() {
             ) {
               setSession((prev) => ({
                 ...prev,
-                distance: prev.distance + movedDistance,
+                distance:
+                  prev.distance +
+                  movedDistance,
               }));
 
               setPathCoordinates((prev) => [
@@ -73,7 +82,9 @@ export default function RunPage() {
           }
         }
 
-        prevLocationRef.current = newLocation;
+        prevLocationRef.current =
+          newLocation;
+
         setLocation(newLocation);
       },
       (error) => {
@@ -91,7 +102,9 @@ export default function RunPage() {
     );
 
     return () => {
-      navigator.geolocation.clearWatch(watchId);
+      navigator.geolocation.clearWatch(
+        watchId
+      );
     };
   }, [session.isRunning]);
 
@@ -123,7 +136,8 @@ export default function RunPage() {
 
           return {
             ...prev,
-            elapsedTime: newElapsedTime,
+            elapsedTime:
+              newElapsedTime,
             averageSpeed,
             averagePace,
           };
@@ -137,6 +151,8 @@ export default function RunPage() {
   }, [session.isRunning]);
 
   const startRun = () => {
+    setSummary(null);
+
     setSession({
       isRunning: true,
       startTime: Date.now(),
@@ -148,29 +164,43 @@ export default function RunPage() {
 
     setPathCoordinates([]);
 
-    prevLocationRef.current = location;
+    prevLocationRef.current =
+      location;
   };
 
   const stopRun = () => {
+    setSummary({
+      distance: session.distance,
+      elapsedTime: session.elapsedTime,
+      averageSpeed:
+        session.averageSpeed,
+      averagePace:
+        session.averagePace,
+      gpsPoints:
+        pathCoordinates.length,
+    });
+
     setSession((prev) => ({
       ...prev,
       isRunning: false,
     }));
-
-    console.log("Run Summary");
-    console.log("Distance:", session.distance);
-    console.log("GPS Points:", pathCoordinates.length);
-    console.log("Path:", pathCoordinates);
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+  const formatTime = (
+    seconds: number
+  ) => {
+    const mins = Math.floor(
+      seconds / 60
+    );
     const secs = seconds % 60;
 
     return `${String(mins).padStart(
       2,
       "0"
-    )}:${String(secs).padStart(2, "0")}`;
+    )}:${String(secs).padStart(
+      2,
+      "0"
+    )}`;
   };
 
   const formatPace = (
@@ -184,14 +214,14 @@ export default function RunPage() {
     }
 
     const mins = Math.floor(pace);
+
     const secs = Math.round(
       (pace - mins) * 60
     );
 
-    return `${mins}:${String(secs).padStart(
-      2,
-      "0"
-    )} /km`;
+    return `${mins}:${String(
+      secs
+    ).padStart(2, "0")} /km`;
   };
 
   return (
@@ -210,9 +240,10 @@ export default function RunPage() {
 
         <p>
           <strong>Distance:</strong>{" "}
-          {(session.distance / 1000).toFixed(
-            3
-          )} km
+          {(
+            session.distance / 1000
+          ).toFixed(3)}{" "}
+          km
         </p>
 
         <p>
@@ -223,45 +254,116 @@ export default function RunPage() {
         </p>
 
         <p>
-          <strong>Average Speed:</strong>{" "}
+          <strong>
+            Average Speed:
+          </strong>{" "}
           {session.averageSpeed.toFixed(
             2
-          )} km/h
+          )}{" "}
+          km/h
         </p>
 
         <p>
-          <strong>Average Pace:</strong>{" "}
+          <strong>
+            Average Pace:
+          </strong>{" "}
           {formatPace(
             session.averagePace
           )}
         </p>
 
         <p>
-          <strong>GPS Points:</strong>{" "}
+          <strong>
+            GPS Points:
+          </strong>{" "}
           {pathCoordinates.length}
         </p>
 
         <p>
-          <strong>Accuracy:</strong>{" "}
+          <strong>
+            Accuracy:
+          </strong>{" "}
           {accuracy !== null
-            ? `${accuracy.toFixed(1)} m`
+            ? `${accuracy.toFixed(
+                1
+              )} m`
             : "Calculating..."}
         </p>
 
         {location && (
           <>
             <p>
-              <strong>Latitude:</strong>{" "}
+              <strong>
+                Latitude:
+              </strong>{" "}
               {location.lat}
             </p>
 
             <p>
-              <strong>Longitude:</strong>{" "}
+              <strong>
+                Longitude:
+              </strong>{" "}
               {location.lng}
             </p>
           </>
         )}
       </div>
+
+      {summary && (
+        <div className="mt-10 border border-gray-700 bg-zinc-900 rounded-xl p-6">
+          <h2 className="text-3xl font-bold mb-4">
+            🏁 Run Complete
+          </h2>
+
+          <div className="space-y-2">
+            <p>
+              <strong>
+                Distance:
+              </strong>{" "}
+              {(
+                summary.distance /
+                1000
+              ).toFixed(3)}{" "}
+              km
+            </p>
+
+            <p>
+              <strong>
+                Time:
+              </strong>{" "}
+              {formatTime(
+                summary.elapsedTime
+              )}
+            </p>
+
+            <p>
+              <strong>
+                Average Speed:
+              </strong>{" "}
+              {summary.averageSpeed.toFixed(
+                2
+              )}{" "}
+              km/h
+            </p>
+
+            <p>
+              <strong>
+                Average Pace:
+              </strong>{" "}
+              {formatPace(
+                summary.averagePace
+              )}
+            </p>
+
+            <p>
+              <strong>
+                GPS Points:
+              </strong>{" "}
+              {summary.gpsPoints}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 flex gap-4">
         {!session.isRunning ? (
