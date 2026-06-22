@@ -27,11 +27,22 @@ export default function RunPage() {
 
   const prevLocationRef = useRef<Location | null>(null);
 
-  // GPS Tracking
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        setAccuracy(position.coords.accuracy);
+        const currentAccuracy = position.coords.accuracy;
+
+        setAccuracy(currentAccuracy);
+
+        // Ignore bad GPS readings
+        if (currentAccuracy > 20) {
+          console.log(
+            `Ignored GPS point. Accuracy too poor: ${currentAccuracy.toFixed(
+              1
+            )}m`
+          );
+          return;
+        }
 
         const newLocation = {
           lat: position.coords.latitude,
@@ -49,7 +60,17 @@ export default function RunPage() {
               newLocation.lng
             );
 
-            if (movedDistance > 5) {
+            console.log({
+              accuracy: currentAccuracy,
+              movedDistance,
+            });
+
+            // Ignore GPS jitter (<5m)
+            // Ignore impossible jumps (>50m)
+            if (
+              movedDistance > 5 &&
+              movedDistance < 50
+            ) {
               setSession((prev) => ({
                 ...prev,
                 distance: prev.distance + movedDistance,
@@ -67,12 +88,16 @@ export default function RunPage() {
         setLocation(newLocation);
       },
       (error) => {
-        console.error("GPS Error:", error.message);
+        console.error(
+          "GPS Error:",
+          error.code,
+          error.message
+        );
       },
       {
         enableHighAccuracy: true,
         timeout: 30000,
-        maximumAge: 5000,
+        maximumAge: 0,
       }
     );
 
@@ -81,7 +106,6 @@ export default function RunPage() {
     };
   }, [session.isRunning]);
 
-  // Timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -109,6 +133,7 @@ export default function RunPage() {
 
     setPathCoordinates([]);
 
+    // Reset previous point
     prevLocationRef.current = location;
   };
 
@@ -118,7 +143,10 @@ export default function RunPage() {
       isRunning: false,
     }));
 
-    console.log("Run Path:", pathCoordinates);
+    console.log("Run Summary");
+    console.log("Distance:", session.distance);
+    console.log("GPS Points:", pathCoordinates.length);
+    console.log("Path:", pathCoordinates);
   };
 
   const formatTime = (seconds: number) => {
